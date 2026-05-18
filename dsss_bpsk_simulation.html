@@ -1,0 +1,910 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DSSS + BPSK — Simulação Interactiva</title>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    /* ── Design Tokens ── */
+    :root {
+      --bg:       #F5F5F2;
+      --surface:  #FFFFFF;
+      --border:   #E2E2DC;
+      --text:     #18181A;
+      --muted:    #6B6B67;
+      --faint:    #9A9A96;
+
+      --data:     #2563EB;
+      --data-bg:  #EFF6FF;
+      --pn:       #D97706;
+      --pn-bg:    #FFFBEB;
+      --xor:      #7C3AED;
+      --xor-bg:   #F5F3FF;
+      --bpsk:     #059669;
+      --bpsk-bg:  #ECFDF5;
+      --tx:       #DC2626;
+      --tx-bg:    #FEF2F2;
+
+      --r:        10px;
+      --sh:       0 1px 3px rgba(0,0,0,0.07), 0 1px 2px rgba(0,0,0,0.04);
+      --sh-md:    0 4px 14px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 28px 20px 40px;
+    }
+
+    /* ── Header ── */
+    .hdr {
+      text-align: center;
+      margin-bottom: 26px;
+    }
+    .hdr h1 {
+      font-size: 21px;
+      font-weight: 700;
+      letter-spacing: -0.4px;
+      color: var(--text);
+    }
+    .hdr p {
+      font-size: 12.5px;
+      color: var(--faint);
+      margin-top: 3px;
+    }
+
+    /* ── Tabs ── */
+    .tabs {
+      display: flex;
+      gap: 3px;
+      background: var(--border);
+      border-radius: 11px;
+      padding: 4px;
+      max-width: 500px;
+      margin: 0 auto 26px;
+    }
+    .tab-btn {
+      flex: 1;
+      padding: 8px 10px;
+      border: none;
+      border-radius: 8px;
+      font-family: inherit;
+      font-size: 12.5px;
+      font-weight: 600;
+      cursor: pointer;
+      background: transparent;
+      color: var(--faint);
+      transition: all 0.15s ease;
+    }
+    .tab-btn.active {
+      background: var(--surface);
+      color: var(--text);
+      box-shadow: var(--sh);
+    }
+
+    /* ── Panels ── */
+    .panel { display: none; }
+    .panel.active { display: block; }
+
+    /* ── Card ── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      padding: 22px;
+      box-shadow: var(--sh);
+    }
+
+    /* ════════════════════════════════════
+       TAB 1 — Espalhamento de Espectro
+    ════════════════════════════════════ */
+    .compare-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      margin-bottom: 20px;
+    }
+
+    .col-hdr {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.9px;
+      padding-bottom: 9px;
+      margin-bottom: 14px;
+      border-bottom: 2px solid;
+    }
+    .col-hdr.normal { color: var(--bpsk); border-color: var(--bpsk); }
+    .col-hdr.dsss   { color: var(--tx);   border-color: var(--tx); }
+
+    .srow { margin-bottom: 6px; }
+    .slbl {
+      font-size: 10.5px;
+      font-weight: 600;
+      color: var(--muted);
+      margin-bottom: 3px;
+    }
+
+    canvas.sc       { display:block; width:100%; height:54px; border-radius:6px; }
+    canvas.sc-sm    { display:block; width:100%; height:42px; border-radius:6px; }
+    canvas.sc-bpsk  { display:block; width:100%; height:72px; border-radius:6px; }
+    canvas.sc-spec  { display:block; width:100%; height:88px; border-radius:6px; }
+
+    .arr { display:flex; align-items:center; justify-content:center; height:22px; color:var(--faint); font-size:16px; }
+
+    .badge {
+      display:inline-flex; align-items:center; justify-content:center;
+      border-radius:6px; font-size:10.5px; font-weight:700;
+      padding:3px 11px; letter-spacing:0.4px;
+    }
+    .badge-bpsk { background:var(--bpsk-bg); color:var(--bpsk); border:1.5px solid var(--bpsk); }
+    .badge-xor  { background:var(--xor-bg);  color:var(--xor);  border:1.5px solid var(--xor); }
+
+    .xrow {
+      display:flex; align-items:center; gap:8px; margin-bottom:6px;
+    }
+    .xsym { font-size:22px; color:var(--xor); flex-shrink:0; line-height:1; }
+    .xblock {
+      flex:1; border:1.5px solid var(--pn); border-radius:7px;
+      padding:4px 6px; background:var(--pn-bg);
+    }
+    .xblock .slbl { color:var(--pn); }
+
+    .spec-grid {
+      display:grid; grid-template-columns:1fr 1fr; gap:20px;
+    }
+    .spec-ttl {
+      font-size:11.5px; font-weight:600; text-align:center;
+      margin-bottom:4px;
+    }
+
+    .divhr { height:1px; background:var(--border); margin:16px 0; }
+
+    /* ════════════════════════════════════
+       TAB 2 — Interactive
+    ════════════════════════════════════ */
+    .sim-wrap { max-width: 920px; margin: 0 auto; }
+
+    .sec-hdr {
+      font-size: 10.5px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1.1px;
+      color: var(--muted);
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .sec-hdr::after {
+      content:''; flex:1; height:1px; background:var(--border);
+    }
+
+    .flow { display:flex; flex-direction:column; gap:8px; }
+
+    .frow {
+      display:grid;
+      grid-template-columns: 136px 1fr;
+      align-items:center;
+      gap:12px;
+    }
+    .flbl {
+      font-size:11.5px; font-weight:600; color:var(--muted);
+      text-align:right; line-height:1.3;
+    }
+    .flbl .dot {
+      display:inline-block; width:7px; height:7px;
+      border-radius:50%; margin-right:5px; vertical-align:middle;
+    }
+
+    /* Bit / chip cells */
+    .brow { display:flex; gap:4px; align-items:center; flex-wrap:wrap; }
+    .bc {
+      width:34px; height:34px; border-radius:7px;
+      display:flex; align-items:center; justify-content:center;
+      font-family:'JetBrains Mono', monospace; font-size:14px; font-weight:600;
+      cursor:pointer; user-select:none; transition:transform 0.1s, box-shadow 0.1s;
+      border:1.5px solid transparent;
+    }
+    .bc:hover:not(.ro) { transform:scale(1.1); box-shadow:0 2px 8px rgba(0,0,0,0.12); }
+    .bc:active:not(.ro) { transform:scale(0.94); }
+    .bc.ro { cursor:default; }
+
+    .bc.d0 { background:var(--data-bg); color:var(--data); border-color:rgba(37,99,235,0.22); }
+    .bc.d1 { background:var(--data);    color:#fff;        border-color:var(--data); }
+    .bc.p0 { background:var(--pn-bg);   color:var(--pn);   border-color:rgba(217,119,6,0.22); }
+    .bc.p1 { background:var(--pn);      color:#fff;        border-color:var(--pn); }
+    .bc.x0 { background:var(--xor-bg);  color:var(--xor);  border-color:rgba(124,58,237,0.18); }
+    .bc.x1 { background:var(--xor);     color:#fff;        border-color:var(--xor); }
+    .bc.r0 { background:var(--data-bg); color:var(--data); border-color:rgba(37,99,235,0.22); }
+    .bc.r1 { background:var(--data);    color:#fff;        border-color:var(--data); }
+
+    canvas.wv      { display:block; width:100%; height:60px; border-radius:6px; }
+    canvas.wv-tall { display:block; width:100%; height:76px; border-radius:6px; }
+
+    /* BPSK info pill */
+    .bpsk-pill {
+      display:inline-flex; align-items:center; gap:10px;
+      padding:4px 10px; background:var(--bpsk-bg);
+      border:1px solid rgba(5,150,105,0.2); border-radius:6px;
+      font-size:10.5px; color:var(--bpsk); font-weight:600;
+      margin-bottom:5px;
+    }
+    .bpsk-pill span.sep { opacity:0.3; }
+
+    /* Canal separator */
+    .canal {
+      margin:18px 0; display:flex; align-items:center; gap:12px;
+    }
+    .canal::before, .canal::after {
+      content:''; flex:1; height:2px;
+      background:repeating-linear-gradient(90deg, var(--border) 0, var(--border) 6px, transparent 6px, transparent 12px);
+    }
+    .canal-lbl {
+      font-size:10.5px; font-weight:700; text-transform:uppercase;
+      letter-spacing:1.1px; color:var(--muted); white-space:nowrap;
+      padding:4px 12px; border:1.5px dashed var(--border); border-radius:20px;
+    }
+
+    /* Stats bar */
+    .stats {
+      display:flex; gap:14px; margin-top:16px;
+      padding:12px 16px; background:var(--bg);
+      border-radius:8px; border:1px solid var(--border);
+    }
+    .stat { flex:1; text-align:center; }
+    .stat-v {
+      font-family:'JetBrains Mono', monospace;
+      font-size:19px; font-weight:600; color:var(--text);
+    }
+    .stat-l {
+      font-size:10px; color:var(--faint);
+      margin-top:2px; font-weight:600;
+      text-transform:uppercase; letter-spacing:0.5px;
+    }
+
+    /* Recovery badge */
+    .rec-badge {
+      display:inline-flex; align-items:center; gap:5px;
+      padding:4px 12px; border-radius:20px;
+      font-size:11.5px; font-weight:700;
+    }
+    .rec-badge.ok  { background:var(--bpsk-bg); color:var(--bpsk); }
+    .rec-badge.err { background:var(--tx-bg);   color:var(--tx); }
+
+    /* Legend */
+    .legend {
+      display:flex; gap:14px; flex-wrap:wrap; margin-bottom:16px;
+    }
+    .leg-item {
+      display:flex; align-items:center; gap:5px;
+      font-size:11px; color:var(--muted);
+    }
+    .leg-dot {
+      width:8px; height:8px; border-radius:50%; flex-shrink:0;
+    }
+
+    /* Responsive */
+    @media (max-width:680px) {
+      .compare-grid, .spec-grid { grid-template-columns:1fr; }
+      .frow { grid-template-columns:90px 1fr; }
+      body { padding:16px 12px 32px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="hdr">
+  <h1>Espalhamento de Espectro</h1>
+  <p>Simulação Interactiva — DSSS + BPSK</p>
+</div>
+
+<div class="tabs">
+  <button class="tab-btn active" onclick="switchTab('tab1',this)">Espalhamento de Espectro</button>
+  <button class="tab-btn"        onclick="switchTab('tab2',this)">DSSS + BPSK Interactivo</button>
+</div>
+
+<!-- ══════════════════════════════════════════════════
+     TAB 1
+══════════════════════════════════════════════════ -->
+<div id="tab1" class="panel active">
+  <div class="card">
+
+    <div class="compare-grid">
+
+      <!-- LEFT — Normal BPSK -->
+      <div>
+        <div class="col-hdr normal">Normal BPSK</div>
+
+        <div class="srow">
+          <div class="slbl">Sinal Modulante</div>
+          <canvas id="c1-data" class="sc"></canvas>
+        </div>
+
+        <div class="arr">↓</div>
+        <div style="text-align:center;margin-bottom:6px;"><span class="badge badge-bpsk">BPSK</span></div>
+        <div class="arr">↓</div>
+
+        <div class="srow">
+          <div class="slbl">Sinal Modulado</div>
+          <canvas id="c1-bpsk" class="sc-bpsk"></canvas>
+        </div>
+      </div>
+
+      <!-- RIGHT — DSSS + BPSK -->
+      <div>
+        <div class="col-hdr dsss">DSSS + BPSK</div>
+
+        <div class="srow">
+          <div class="slbl">Sinal Modulante</div>
+          <canvas id="c2-data" class="sc"></canvas>
+        </div>
+
+        <div class="xrow" style="margin-top:5px;">
+          <div class="xsym">⊕</div>
+          <div class="xblock">
+            <div class="slbl">Código PN (SF = 4)</div>
+            <canvas id="c2-pn" class="sc-sm"></canvas>
+          </div>
+        </div>
+
+        <div style="text-align:center;margin-bottom:5px;"><span class="badge badge-xor">XOR ⊕</span></div>
+
+        <div class="srow">
+          <div class="slbl">Sinal Espalhado</div>
+          <canvas id="c2-xor" class="sc"></canvas>
+        </div>
+
+        <div class="arr">↓</div>
+        <div style="text-align:center;margin-bottom:6px;"><span class="badge badge-bpsk">BPSK</span></div>
+        <div class="arr">↓</div>
+
+        <div class="srow">
+          <div class="slbl">Sinal TX Espalhado</div>
+          <canvas id="c2-bpsk" class="sc-bpsk"></canvas>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="divhr"></div>
+
+    <!-- Spectrum comparison -->
+    <div class="slbl" style="text-align:center;font-size:11.5px;margin-bottom:10px;">Comparação Espectral em Frequência</div>
+    <div class="spec-grid">
+      <div>
+        <div class="spec-ttl" style="color:var(--bpsk);">Espectro Normal — estreito</div>
+        <canvas id="spec-n" class="sc-spec"></canvas>
+      </div>
+      <div>
+        <div class="spec-ttl" style="color:var(--tx);">Espectro DSSS — espalhado</div>
+        <canvas id="spec-d" class="sc-spec"></canvas>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════
+     TAB 2
+══════════════════════════════════════════════════ -->
+<div id="tab2" class="panel">
+  <div class="sim-wrap">
+  <div class="card">
+
+    <div class="legend">
+      <div class="leg-item"><div class="leg-dot" style="background:var(--data)"></div>Dados</div>
+      <div class="leg-item"><div class="leg-dot" style="background:var(--pn)"></div>Código PN</div>
+      <div class="leg-item"><div class="leg-dot" style="background:var(--xor)"></div>Resultado XOR</div>
+      <div class="leg-item"><div class="leg-dot" style="background:var(--bpsk)"></div>Sinal TX (BPSK)</div>
+    </div>
+
+    <!-- ─── TRANSMISSOR ─── -->
+    <div class="sec-hdr">Transmissor</div>
+    <div class="flow">
+
+      <div class="frow">
+        <div class="flbl"><span class="dot" style="background:var(--data)"></span>Sinal Modulante</div>
+        <div class="brow" id="data-bits"></div>
+      </div>
+
+      <div class="frow">
+        <div class="flbl"><span class="dot" style="background:var(--pn)"></span>Código PN</div>
+        <div class="brow" id="pn-chips"></div>
+      </div>
+
+      <div class="frow">
+        <div class="flbl"><span class="dot" style="background:var(--xor)"></span>XOR Espalhado</div>
+        <div class="brow" id="xor-chips"></div>
+      </div>
+
+      <div class="frow">
+        <div class="flbl"><span class="dot" style="background:var(--bpsk)"></span>Sinal TX (BPSK)</div>
+        <div style="flex:1;">
+          <div class="bpsk-pill">
+            <span>chip = 0 → fase 0°</span>
+            <span class="sep">│</span>
+            <span>chip = 1 → fase 180°</span>
+          </div>
+          <canvas id="tx-wave" class="wv-tall"></canvas>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ─── CANAL ─── -->
+    <div class="canal"><div class="canal-lbl">Canal de Comunicação</div></div>
+
+    <!-- ─── RECEPTOR ─── -->
+    <div class="sec-hdr">Receptor</div>
+    <div class="flow">
+
+      <div class="frow">
+        <div class="flbl"><span class="dot" style="background:var(--bpsk)"></span>Sinal Recebido</div>
+        <div style="flex:1;">
+          <canvas id="rx-wave" class="wv-tall"></canvas>
+        </div>
+      </div>
+
+      <div class="frow">
+        <div class="flbl"><span class="dot" style="background:var(--pn)"></span>PN Réplica</div>
+        <div class="brow" id="pn-replica"></div>
+      </div>
+
+      <div class="frow">
+        <div class="flbl"><span class="dot" style="background:var(--xor)"></span>Desespalhado</div>
+        <div class="brow" id="desp-chips"></div>
+      </div>
+
+      <div class="frow">
+        <div class="flbl"><span class="dot" style="background:var(--data)"></span>Dados Recuperados</div>
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+          <div class="brow" id="rec-bits"></div>
+          <div id="rec-badge" class="rec-badge ok">✓ Correcto</div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ─── STATS ─── -->
+    <div class="stats">
+      <div class="stat">
+        <div class="stat-v" id="st-sf">—</div>
+        <div class="stat-l">Spreading Factor</div>
+      </div>
+      <div class="stat">
+        <div class="stat-v" id="st-pg">—</div>
+        <div class="stat-l">Ganho Processamento</div>
+      </div>
+      <div class="stat">
+        <div class="stat-v" id="st-cpb">—</div>
+        <div class="stat-l">Chips / Bit</div>
+      </div>
+    </div>
+
+  </div>
+  </div>
+</div>
+
+<script>
+// ─────────────────────────────────────────────
+//  Constants & State
+// ─────────────────────────────────────────────
+const N_DATA  = 4;
+const N_PN_T2 = 8;                        // tab2: SF=2
+const CPB_T2  = N_PN_T2 / N_DATA;        // chips per bit = 2
+const N_PN_T1 = 16;                       // tab1: SF=4
+const CPB_T1  = N_PN_T1 / N_DATA;        // = 4
+
+const T1_DATA = [1, 0, 1, 1];
+const T1_PN   = [1,0,1,0, 0,1,1,0, 1,1,0,1, 0,1,0,1];
+
+let dataBits = [1, 0, 1, 1];
+let pnChips  = [1, 0, 1, 0, 0, 1, 1, 0];
+
+// ─────────────────────────────────────────────
+//  Logic
+// ─────────────────────────────────────────────
+function xorExpand(data, pn, cpb) {
+  const out = [];
+  for (let i = 0; i < data.length; i++)
+    for (let j = 0; j < cpb; j++)
+      out.push(data[i] ^ pn[i * cpb + j]);
+  return out;
+}
+
+function deSpread(xored, pn) {
+  return xored.map((v, i) => v ^ pn[i]);
+}
+
+function majority(chips, cpb) {
+  const out = [];
+  for (let i = 0; i < chips.length / cpb; i++) {
+    let s = 0;
+    for (let j = 0; j < cpb; j++) s += chips[i * cpb + j];
+    out.push(s >= cpb / 2 ? 1 : 0);
+  }
+  return out;
+}
+
+// ─────────────────────────────────────────────
+//  Canvas Helpers
+// ─────────────────────────────────────────────
+const DPR = Math.min(window.devicePixelRatio || 1, 2);
+
+function prep(canvas) {
+  const w = canvas.offsetWidth  || canvas.parentElement.offsetWidth || 400;
+  const h = canvas.offsetHeight || 60;
+  canvas.width  = w * DPR;
+  canvas.height = h * DPR;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(DPR, DPR);
+  return { ctx, w, h };
+}
+
+function grid(ctx, w, h) {
+  ctx.save();
+  ctx.strokeStyle = 'rgba(0,0,0,0.035)';
+  ctx.lineWidth = 1;
+  for (let y = h / 4; y < h; y += h / 4) {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function zeroline(ctx, w, h) {
+  ctx.save();
+  ctx.strokeStyle = 'rgba(0,0,0,0.08)';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([3, 5]);
+  ctx.beginPath(); ctx.moveTo(0, h/2); ctx.lineTo(w, h/2); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.restore();
+}
+
+// Digital square-wave
+// opts: { showBits, lw, showDividers }
+function drawDig(ctx, bits, w, h, color, opts = {}) {
+  const { showBits = true, lw = 2, showDividers = true } = opts;
+  const n  = bits.length;
+  const cw = w / n;
+  const hi = h * 0.17;
+  const lo = h * 0.83;
+
+  // per-cell tinted background
+  bits.forEach((b, i) => {
+    ctx.fillStyle = b ? color + '15' : color + '07';
+    ctx.fillRect(i * cw, 0, cw, h);
+  });
+
+  grid(ctx, w, h);
+  zeroline(ctx, w, h);
+
+  // vertical cell dividers
+  if (showDividers) {
+    ctx.save();
+    ctx.strokeStyle = color + '25';
+    ctx.lineWidth = 1;
+    for (let i = 1; i < n; i++) {
+      ctx.beginPath();
+      ctx.moveTo(i * cw, 6); ctx.lineTo(i * cw, h - 6);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // waveform
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth   = lw;
+  ctx.lineJoin    = 'miter';
+  ctx.beginPath();
+  let py = bits[0] ? hi : lo;
+  ctx.moveTo(0, py);
+  bits.forEach((b, i) => {
+    const y = b ? hi : lo;
+    const x = i * cw;
+    if (y !== py) { ctx.lineTo(x, py); ctx.lineTo(x, y); }
+    ctx.lineTo((i + 1) * cw, y);
+    py = y;
+  });
+  ctx.stroke();
+  ctx.restore();
+
+  // bit labels
+  if (showBits) {
+    ctx.save();
+    ctx.font      = `600 10px 'JetBrains Mono', monospace`;
+    ctx.textAlign = 'center';
+    bits.forEach((b, i) => {
+      ctx.fillStyle = color;
+      const x = i * cw + cw / 2;
+      ctx.fillText(b.toString(), x, b ? hi - 4 : lo + 11);
+    });
+    ctx.restore();
+  }
+}
+
+// BPSK sinusoidal — phase 0 for bit=0, phase π for bit=1
+// cpb: cycles per chip (float)
+function drawBPSK(ctx, bits, w, h, color, cpb = 2, opts = {}) {
+  const { showPhase = true, lw = 1.8 } = opts;
+  const n    = bits.length;
+  const cw   = w / n;
+  const mid  = h / 2;
+  const amp  = h * 0.33;
+  const PTS  = 120;
+  const TAU  = Math.PI * 2;
+
+  // per-chip bg
+  bits.forEach((b, i) => {
+    ctx.fillStyle = b ? color + '13' : color + '07';
+    ctx.fillRect(i * cw, 0, cw, h);
+  });
+
+  grid(ctx, w, h);
+  zeroline(ctx, w, h);
+
+  // dividers
+  ctx.save();
+  ctx.strokeStyle = color + '28';
+  ctx.lineWidth   = 1;
+  for (let i = 1; i < n; i++) {
+    ctx.beginPath();
+    ctx.moveTo(i * cw, 5); ctx.lineTo(i * cw, h - 5);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  // waveform
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth   = lw;
+  ctx.beginPath();
+  let first = true;
+  bits.forEach((b, i) => {
+    const phase = b ? Math.PI : 0;
+    for (let s = 0; s <= PTS; s++) {
+      const t = s / PTS;
+      const x = i * cw + t * cw;
+      const y = mid - amp * Math.sin(TAU * cpb * t + phase);
+      first ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      first = false;
+    }
+  });
+  ctx.stroke();
+  ctx.restore();
+
+  // phase labels
+  if (showPhase) {
+    ctx.save();
+    ctx.font         = `500 9px 'Plus Jakarta Sans', sans-serif`;
+    ctx.textAlign    = 'center';
+    ctx.globalAlpha  = 0.65;
+    bits.forEach((b, i) => {
+      ctx.fillStyle = color;
+      ctx.fillText(b ? '180°' : '0°', i * cw + cw / 2, h - 3);
+    });
+    ctx.restore();
+  }
+}
+
+// Sinc² spectrum shape
+function drawSpectrum(ctx, w, h, color, bwFrac, maxAFrac) {
+  const mid      = w / 2;
+  const baseline = h - 20;
+  const maxH     = (h - 32) * maxAFrac;
+  const halfBW   = bwFrac * w / 2;
+
+  grid(ctx, w, h);
+
+  // frequency axis
+  ctx.save();
+  ctx.strokeStyle = 'rgba(0,0,0,0.15)';
+  ctx.lineWidth   = 1.2;
+  ctx.beginPath();
+  ctx.moveTo(10, baseline); ctx.lineTo(w - 8, baseline);
+  // arrowhead
+  ctx.lineTo(w - 14, baseline - 4);
+  ctx.moveTo(w - 8, baseline);
+  ctx.lineTo(w - 14, baseline + 4);
+  ctx.stroke();
+  ctx.restore();
+
+  // "f" label
+  ctx.save();
+  ctx.font      = `italic 11px 'Plus Jakarta Sans', sans-serif`;
+  ctx.fillStyle = 'rgba(0,0,0,0.35)';
+  ctx.textAlign = 'left';
+  ctx.fillText('f', w - 8, baseline + 10);
+  ctx.restore();
+
+  // centre tick
+  ctx.save();
+  ctx.strokeStyle = 'rgba(0,0,0,0.1)';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([3,4]);
+  ctx.beginPath();
+  ctx.moveTo(mid, baseline); ctx.lineTo(mid, baseline - maxH - 10);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.restore();
+
+  // sinc² curve
+  ctx.save();
+  ctx.beginPath();
+  for (let x = 10; x <= w - 10; x++) {
+    const u = (x - mid) / halfBW;
+    let v;
+    if (Math.abs(u) < 0.001) { v = 1; }
+    else { const s = Math.sin(Math.PI * u) / (Math.PI * u); v = s * s; }
+    const y = baseline - v * maxH;
+    x === 10 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  }
+  // close path for fill
+  ctx.lineTo(w - 10, baseline);
+  ctx.lineTo(10, baseline);
+  ctx.closePath();
+
+  // fill
+  const grad = ctx.createLinearGradient(0, baseline - maxH, 0, baseline);
+  grad.addColorStop(0, color + '30');
+  grad.addColorStop(1, color + '08');
+  ctx.fillStyle = grad;
+  ctx.fill();
+
+  // stroke
+  ctx.beginPath();
+  for (let x = 10; x <= w - 10; x++) {
+    const u = (x - mid) / halfBW;
+    let v;
+    if (Math.abs(u) < 0.001) { v = 1; }
+    else { const s = Math.sin(Math.PI * u) / (Math.PI * u); v = s * s; }
+    const y = baseline - v * maxH;
+    x === 10 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  }
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.restore();
+
+  // BW annotation arrows
+  ctx.save();
+  const bwL = mid - halfBW * 0.85;
+  const bwR = mid + halfBW * 0.85;
+  const ay   = baseline + 6;
+  ctx.strokeStyle = color + 'AA';
+  ctx.lineWidth   = 1.2;
+  // line
+  ctx.beginPath(); ctx.moveTo(bwL, ay); ctx.lineTo(bwR, ay); ctx.stroke();
+  // arrowheads
+  [[bwL, 1], [bwR, -1]].forEach(([x, dir]) => {
+    ctx.beginPath();
+    ctx.moveTo(x, ay);
+    ctx.lineTo(x + dir * 6, ay - 3);
+    ctx.moveTo(x, ay);
+    ctx.lineTo(x + dir * 6, ay + 3);
+    ctx.stroke();
+  });
+  ctx.font      = `600 9px 'Plus Jakarta Sans', sans-serif`;
+  ctx.fillStyle = color;
+  ctx.textAlign = 'center';
+  ctx.fillText('BW', mid, ay + 12);
+  ctx.restore();
+}
+
+// ─────────────────────────────────────────────
+//  Tab 1 Render
+// ─────────────────────────────────────────────
+function renderTab1() {
+  const xor1 = xorExpand(T1_DATA, T1_PN, CPB_T1);
+
+  function draw(id, fn) {
+    const c = document.getElementById(id);
+    if (!c) return;
+    c.removeAttribute('width'); c.removeAttribute('height'); // force fresh size read
+    const { ctx, w, h } = prep(c);
+    ctx.clearRect(0, 0, w, h);
+    fn(ctx, w, h);
+  }
+
+  draw('c1-data', (ctx, w, h) => drawDig(ctx, T1_DATA, w, h, '#2563EB'));
+  draw('c1-bpsk', (ctx, w, h) => drawBPSK(ctx, T1_DATA, w, h, '#059669', 2.5));
+  draw('c2-data', (ctx, w, h) => drawDig(ctx, T1_DATA, w, h, '#2563EB'));
+  draw('c2-pn',   (ctx, w, h) => drawDig(ctx, T1_PN,   w, h, '#D97706', { showBits: false }));
+  draw('c2-xor',  (ctx, w, h) => drawDig(ctx, xor1,    w, h, '#7C3AED', { showBits: false }));
+  draw('c2-bpsk', (ctx, w, h) => drawBPSK(ctx, xor1,   w, h, '#DC2626', 1.4, { showPhase: false }));
+  draw('spec-n',  (ctx, w, h) => drawSpectrum(ctx, w, h, '#059669', 0.13, 0.88));
+  draw('spec-d',  (ctx, w, h) => drawSpectrum(ctx, w, h, '#DC2626', 0.50, 0.22));
+}
+
+// ─────────────────────────────────────────────
+//  Tab 2 Render
+// ─────────────────────────────────────────────
+function makeCells(container, bits, cls, clickable, onToggle) {
+  container.innerHTML = '';
+  bits.forEach((b, i) => {
+    const el = document.createElement('div');
+    el.className = `bc ${cls}${b}${clickable ? '' : ' ro'}`;
+    el.textContent = b;
+    if (clickable) el.addEventListener('click', () => onToggle(i));
+    container.appendChild(el);
+  });
+}
+
+function renderTab2() {
+  const xorChips = xorExpand(dataBits, pnChips, CPB_T2);
+  const despChips = deSpread(xorChips, pnChips);
+  const recovered = majority(despChips, CPB_T2);
+
+  // bit cell rows
+  makeCells(document.getElementById('data-bits'), dataBits, 'd', true, i => { dataBits[i] ^= 1; renderTab2(); });
+  makeCells(document.getElementById('pn-chips'),  pnChips,  'p', true, i => { pnChips[i]  ^= 1; renderTab2(); });
+  makeCells(document.getElementById('xor-chips'), xorChips, 'x', false, null);
+  makeCells(document.getElementById('pn-replica'), pnChips, 'p', false, null);
+  makeCells(document.getElementById('desp-chips'), despChips, 'x', false, null);
+  makeCells(document.getElementById('rec-bits'),  recovered, 'r', false, null);
+
+  // recovery badge
+  const ok = recovered.every((v, i) => v === dataBits[i]);
+  const badge = document.getElementById('rec-badge');
+  badge.className = `rec-badge ${ok ? 'ok' : 'err'}`;
+  badge.textContent = ok ? '✓ Correcto' : '✗ Erro';
+
+  // stats
+  document.getElementById('st-sf').textContent  = CPB_T2;
+  document.getElementById('st-pg').textContent  = (10 * Math.log10(CPB_T2)).toFixed(1) + ' dB';
+  document.getElementById('st-cpb').textContent = CPB_T2;
+
+  function wdraw(id, fn) {
+    const c = document.getElementById(id);
+    if (!c) return;
+    c.removeAttribute('width'); c.removeAttribute('height');
+    const { ctx, w, h } = prep(c);
+    ctx.clearRect(0, 0, w, h);
+    fn(ctx, w, h);
+  }
+
+  wdraw('tx-wave', (ctx, w, h) => drawBPSK(ctx, xorChips, w, h, '#059669', 1.8, { showPhase: true }));
+  wdraw('rx-wave', (ctx, w, h) => drawBPSK(ctx, xorChips, w, h, '#DC2626', 1.8, { showPhase: false }));
+}
+
+// ─────────────────────────────────────────────
+//  Tab Switching
+// ─────────────────────────────────────────────
+function switchTab(id, btn) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  if (btn) btn.classList.add('active');
+  setTimeout(() => id === 'tab1' ? renderTab1() : renderTab2(), 30);
+}
+
+// ─────────────────────────────────────────────
+//  Resize
+// ─────────────────────────────────────────────
+let resizeTimer;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    const active = document.querySelector('.panel.active');
+    if (active.id === 'tab1') renderTab1(); else renderTab2();
+  }, 160);
+});
+
+// ─────────────────────────────────────────────
+//  Init
+// ─────────────────────────────────────────────
+window.addEventListener('load', () => {
+  renderTab1();
+  // pre-compute tab2 in background so it's ready
+  setTimeout(renderTab2, 50);
+});
+</script>
+</body>
+</html>
